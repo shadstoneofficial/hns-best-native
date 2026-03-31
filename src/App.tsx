@@ -10,6 +10,7 @@ function App() {
     const urlParam = params.get('url');
     if (urlParam) {
       setHnsUrl(urlParam);
+      document.title = urlParam;
     }
   }, []);
 
