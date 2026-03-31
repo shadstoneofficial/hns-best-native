@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ExternalLink, Copy, Check, Zap, Cpu, Code, AlertTriangle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface AgentIdentityCardProps {
   hnsUrl: string;
@@ -16,6 +18,10 @@ interface AgentManifest {
   did?: string;
   trust?: string[];
   uptime?: string;
+  payment_endpoints?: {
+    lightning?: string;
+    tempo_mpp?: string;
+  };
 }
 
 const GATEWAY_URL = 'https://headlessdomains.com';
@@ -69,12 +75,12 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
     resolveAgent();
   }, [cleanName]);
 
-  const handleCopy = (text: string, type: 'webhook' | 'did') => {
+  const handleCopy = (text: string, type: 'webhook' | 'did' | 'lightning' | 'tempo') => {
     navigator.clipboard.writeText(text);
     if (type === 'webhook') {
       setCopiedWebhook(true);
       setTimeout(() => setCopiedWebhook(false), 2000);
-    } else {
+    } else if (type === 'did') {
       setCopiedDid(true);
       setTimeout(() => setCopiedDid(false), 2000);
     }
@@ -95,11 +101,29 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
   }
 
   if (error || !agentData) {
+    const isNotFound = error?.includes('404') || error?.includes('not found');
+    
     return (
       <div className="min-h-screen bg-background text-zinc-300 font-sans p-4 md:p-8 flex flex-col items-center justify-center">
         <AlertTriangle className="w-12 h-12 text-magenta mb-6 drop-shadow-[0_0_8px_rgba(255,0,170,0.5)]" />
         <h2 className="text-xl font-bold text-zinc-100 mb-2">Resolution Failed</h2>
-        <p className="font-mono text-zinc-400 text-sm mb-8">{error || 'Unknown error'}</p>
+        
+        {isNotFound ? (
+          <div className="text-center max-w-md mb-8">
+            <p className="font-mono text-zinc-400 text-sm mb-4">Agent manifest not found for <span className="text-cyan">hns://{cleanName}</span></p>
+            <p className="text-zinc-500 text-sm mb-6">This agent hasn't registered its manifest on the gateway yet, or the domain doesn't exist.</p>
+            <button 
+              onClick={() => window.open('https://headlessdomains.com', '_blank')}
+              className="w-full flex justify-center items-center space-x-2 bg-cyan/10 hover:bg-cyan/20 text-cyan border border-cyan/30 px-6 py-3 rounded-lg transition-colors shadow-[0_0_10px_rgba(0,243,255,0.1)] hover:shadow-[0_0_15px_rgba(0,243,255,0.2)]"
+            >
+              <span>Register on HeadlessDomains</span>
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <p className="font-mono text-zinc-400 text-sm mb-8">{error || 'Unknown error'}</p>
+        )}
+
         <button 
           onClick={handleOpenHttps}
           className="flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-6 py-3 rounded-lg transition-colors border border-zinc-700 hover:border-zinc-600"
@@ -191,10 +215,12 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
                 <Code className="w-5 h-5 mr-2 text-zinc-400" />
                 SKILL.md
               </h2>
-              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-mono text-sm leading-relaxed text-zinc-400 relative">
-                <pre className="whitespace-pre-wrap">
-                  {showFullSkill ? skillContent : skillPreview}
-                </pre>
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-sans text-sm leading-relaxed text-zinc-300 relative overflow-hidden">
+                <div className={`prose prose-invert prose-sm max-w-none prose-a:text-cyan prose-a:no-underline hover:prose-a:underline prose-code:text-magenta ${!showFullSkill && skillContent.length > previewLength ? 'max-h-64' : ''}`}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {skillContent}
+                  </ReactMarkdown>
+                </div>
                 {!showFullSkill && skillContent.length > previewLength && (
                   <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none rounded-b-xl"></div>
                 )}
@@ -258,14 +284,29 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
               <div className="mt-6 pt-6 border-t border-zinc-800">
                 <h3 className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Payment Protocols</h3>
                 <div className="space-y-3">
-                  <button className="w-full flex items-center justify-center space-x-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 py-2.5 rounded-lg transition-colors font-medium text-sm">
-                    <Zap className="w-4 h-4" />
-                    <span>Pay via Lightning</span>
-                  </button>
-                  <button className="w-full flex items-center justify-center space-x-2 bg-magenta/10 hover:bg-magenta/20 text-magenta border border-magenta/30 py-2.5 rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(255,0,170,0.1)] hover:shadow-[0_0_20px_rgba(255,0,170,0.2)]">
-                    <Code className="w-4 h-4" />
-                    <span>Pay via Tempo MPP</span>
-                  </button>
+                  {agentData.payment_endpoints?.lightning && (
+                    <button 
+                      onClick={() => handleCopy(agentData.payment_endpoints!.lightning!, 'lightning')}
+                      className="w-full flex items-center justify-center space-x-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 py-2.5 rounded-lg transition-colors font-medium text-sm group"
+                    >
+                      <Zap className="w-4 h-4" />
+                      <span>Pay via Lightning</span>
+                      <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
+                    </button>
+                  )}
+                  {agentData.payment_endpoints?.tempo_mpp && (
+                    <button 
+                      onClick={() => handleCopy(agentData.payment_endpoints!.tempo_mpp!, 'tempo')}
+                      className="w-full flex items-center justify-center space-x-2 bg-magenta/10 hover:bg-magenta/20 text-magenta border border-magenta/30 py-2.5 rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(255,0,170,0.1)] hover:shadow-[0_0_20px_rgba(255,0,170,0.2)] group"
+                    >
+                      <Code className="w-4 h-4" />
+                      <span>Pay via Tempo MPP</span>
+                      <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
+                    </button>
+                  )}
+                  {(!agentData.payment_endpoints || (!agentData.payment_endpoints.lightning && !agentData.payment_endpoints.tempo_mpp)) && (
+                    <p className="text-sm text-zinc-500 italic">No payment endpoints provided.</p>
+                  )}
                 </div>
               </div>
             </section>

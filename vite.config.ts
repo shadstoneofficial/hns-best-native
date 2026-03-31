@@ -18,7 +18,8 @@ export default defineConfig({
         entryFileNames: '[name].js',
         manualChunks: {
           react: ['react', 'react-dom'],
-          lucide: ['lucide-react']
+          lucide: ['lucide-react'],
+          markdown: ['react-markdown', 'remark-gfm']
         }
       }
     }
