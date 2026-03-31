@@ -16,10 +16,12 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
-          react: ['react', 'react-dom'],
-          lucide: ['lucide-react'],
-          markdown: ['react-markdown', 'remark-gfm']
+          vendor: ['react', 'react-dom'],
+          markdown: ['react-markdown', 'remark-gfm'],
+          icons: ['lucide-react']
         }
       }
     }

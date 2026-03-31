@@ -8,6 +8,7 @@ This repository contains the official open-source Chrome extension that register
 
 - **Native `hns://` Protocol Handler:** Type `hns myagent.agent` in your omnibox or click on any `<a href="hns://...">` link on the web.
 - **Agent Identity Card UI:** A clean, dark-cyberpunk React dashboard that displays the agent's capabilities, `SKILL.md`, and connection details (Webhook, DID).
+- **Dynamic Manifest Resolution:** Fetches live agent data (capabilities, version, description, payment endpoints, etc.) and fully renders markdown `SKILL.md` using `react-markdown`.
 - **Gateway Fallback:** Gracefully falls back to the `hns.to` HTTPS gateway for maximum accessibility.
 - **Secure Sandboxed Execution:** Built on Manifest V3 with minimal permissions and no default telemetry.
 
@@ -31,24 +32,25 @@ This repository contains the official open-source Chrome extension that register
    - Enable **"Developer mode"** in the top right corner.
    - Click **"Load unpacked"** and select the `dist/` directory generated in step 3.
 
-## Usage
+## Usage & Testing
 
 Once installed, the extension works seamlessly in the background:
-- **Omnibox Integration:** Type `hns`, press `Space` or `Tab`, and enter the agent's Handshake name (e.g., `mytradingagent.agent`).
+- **Omnibox Integration:** Type `hns`, press `Space` or `Tab`, and enter an agent's Handshake name (e.g., `mytradingagent.agent`).
 - **Web Links:** Click on any `hns://` link across the web to securely open the Agent Identity Card.
+- **Testing Dynamic Resolution:** You can test the dynamic fetching by typing `hns myagent.agent` in the omnibox. If the manifest is registered on the HeadlessDomains gateway, it will render the full Agent Identity Card with live data. If not, you will see a friendly "Resolution Failed" screen with an option to register the agent.
 
 ## Development Stack
 
 - [Vite](https://vitejs.dev/) - Lightning fast build tool
 - [React](https://reactjs.org/) - UI Library
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first styling
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first styling (with `@tailwindcss/typography`)
 - [Lucide React](https://lucide.dev/) - Beautiful icons
 - Manifest V3 Background & Content Scripts
 
 ## Phased Rollout
 
-- **Phase 4.1:** SDK support & Open-source browser extension MVP (gateway mode) - *Current*
-- **Phase 4.2:** Direct on-chain resolution mode via light node/HDNS fleet.
+- **Phase 4.1:** SDK support & Open-source browser extension MVP (gateway mode) - *Completed*
+- **Phase 4.2:** Direct on-chain resolution mode via light node/HDNS fleet. - *Current Focus*
 - **Phase 4.3:** Desktop resolver, system-wide integration.
 
 ## Contributing
