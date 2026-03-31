@@ -16,6 +16,10 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          lucide: ['lucide-react']
+        }
       }
     }
   },
