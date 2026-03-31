@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ExternalLink, Copy, Check, Zap, Cpu, Code, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ExternalLink, Copy, Check, Zap, Cpu, Code, AlertTriangle, Server, Globe } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import DOMPurify from 'dompurify';
+import { resolveHandshakeManifestUrl } from '../lib/resolver';
 
 interface AgentIdentityCardProps {
   hnsUrl: string;
@@ -35,6 +37,7 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
   const [skillContent, setSkillContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resolutionMode, setResolutionMode] = useState<'gateway' | 'decentralized'>('gateway');
 
   const cleanName = hnsUrl.replace('hns://', '').replace(/\/$/, '');
 
@@ -46,24 +49,55 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
       setError(null);
       
       try {
-        const [manifestRes, skillRes] = await Promise.all([
-          fetch(`${GATEWAY_URL}/manifests/${cleanName}.json`),
-          fetch(`${GATEWAY_URL}/skills/${cleanName}.md`)
-        ]);
+        // 1. Determine which mode the user selected
+        const storageResult = await chrome.storage.local.get(['resolutionMode']);
+        const mode = storageResult.resolutionMode || 'gateway';
+        setResolutionMode(mode as 'gateway' | 'decentralized');
 
-        if (!manifestRes.ok) {
-          throw new Error(`Agent manifest not found (Status: ${manifestRes.status})`);
-        }
+        if (mode === 'decentralized') {
+          // --- DIRECT RESOLUTION MODE ---
+          const manifestUrl = await resolveHandshakeManifestUrl(cleanName);
+          
+          if (!manifestUrl) {
+            throw new Error(`No agent-manifest TXT record found on Handshake for _agent.${cleanName}`);
+          }
 
-        const manifest = await manifestRes.json();
-        setAgentData(manifest);
+          // Fetch the raw JSON from the decentralized pointer
+          const manifestRes = await fetch(manifestUrl);
+          if (!manifestRes.ok) {
+            throw new Error(`Failed to fetch manifest from ${manifestUrl}`);
+          }
 
-        if (skillRes.ok) {
-          const text = await skillRes.text();
-          setSkillContent(text);
+          const rawManifest = await manifestRes.json();
+          // Minimal validation/sanitization (DOMPurify will handle markdown later)
+          setAgentData(rawManifest);
+
+          // We don't fetch SKILL.md in direct mode yet unless it's explicitly pointed to in the manifest
+          // For now, we will leave it empty or add logic to parse it from the manifest later
+          setSkillContent('SKILL.md fetching in decentralized mode is under construction.');
+
         } else {
-          setSkillContent('No SKILL.md found for this agent.');
+          // --- GATEWAY RESOLUTION MODE ---
+          const [manifestRes, skillRes] = await Promise.all([
+            fetch(`${GATEWAY_URL}/manifests/${cleanName}.json`),
+            fetch(`${GATEWAY_URL}/skills/${cleanName}.md`)
+          ]);
+
+          if (!manifestRes.ok) {
+            throw new Error(`Agent manifest not found (Status: ${manifestRes.status})`);
+          }
+
+          const manifest = await manifestRes.json();
+          setAgentData(manifest);
+
+          if (skillRes.ok) {
+            const text = await skillRes.text();
+            setSkillContent(text);
+          } else {
+            setSkillContent('No SKILL.md found for this agent.');
+          }
         }
+
       } catch (err) {
         console.error('Error resolving hns:// agent:', err);
         setError(err instanceof Error ? err.message : 'Unknown resolution error');
@@ -150,7 +184,9 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
         </div>
         <div className="flex items-center space-x-2 text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
           <ShieldCheck className="w-4 h-4" />
-          <span className="text-xs font-medium uppercase tracking-wider">Verified on Handshake</span>
+          <span className="text-xs font-medium uppercase tracking-wider">
+            Verified {resolutionMode === 'decentralized' ? 'via Decentralized' : 'via Gateway'}
+          </span>
         </div>
         <button 
           onClick={handleOpenHttps}
@@ -218,7 +254,7 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
               <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-sans text-sm leading-relaxed text-zinc-300 relative overflow-hidden">
                 <div className={`prose prose-invert prose-sm max-w-none prose-a:text-cyan prose-a:no-underline hover:prose-a:underline prose-code:text-magenta ${!showFullSkill && skillContent.length > previewLength ? 'max-h-64' : ''}`}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {skillContent}
+                    {DOMPurify.sanitize(skillContent)}
                   </ReactMarkdown>
                 </div>
                 {!showFullSkill && skillContent.length > previewLength && (
