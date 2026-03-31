@@ -39,6 +39,8 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [resolutionMode, setResolutionMode] = useState<'gateway' | 'decentralized'>('gateway');
 
+  const [fallbackTriggered, setFallbackTriggered] = useState(false);
+
   const cleanName = hnsUrl.replace('hns://', '').replace(/\/$/, '');
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
       
       setLoading(true);
       setError(null);
+      setFallbackTriggered(false);
       
       try {
         // 1. Determine which mode the user selected
@@ -56,27 +59,40 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
 
         if (mode === 'decentralized') {
           // --- DIRECT RESOLUTION MODE ---
-          const manifestUrl = await resolveHandshakeManifestUrl(cleanName);
-          
-          if (!manifestUrl) {
-            throw new Error(`No agent-manifest TXT record found on Handshake for _agent.${cleanName}`);
+          try {
+            const manifestUrl = await resolveHandshakeManifestUrl(cleanName);
+            
+            if (!manifestUrl) {
+              throw new Error(`No agent-manifest TXT record found on Handshake for _agent.${cleanName}`);
+            }
+
+            // Fetch the raw JSON from the decentralized pointer with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const manifestRes = await fetch(manifestUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!manifestRes.ok) {
+              throw new Error(`Failed to fetch manifest from ${manifestUrl}`);
+            }
+
+            const rawManifest = await manifestRes.json();
+            setAgentData(rawManifest);
+            setSkillContent('SKILL.md fetching in decentralized mode is under construction.');
+          } catch (directErr) {
+            console.warn('Decentralized resolution failed, falling back to gateway:', directErr);
+            setFallbackTriggered(true);
+            setResolutionMode('gateway');
+            // Auto-switch storage back to gateway for future requests to prevent repeated slow failures
+            chrome.storage.local.set({ resolutionMode: 'gateway' });
+            
+            // Proceed to execute gateway logic below
+            throw new Error('TRIGGER_FALLBACK');
           }
-
-          // Fetch the raw JSON from the decentralized pointer
-          const manifestRes = await fetch(manifestUrl);
-          if (!manifestRes.ok) {
-            throw new Error(`Failed to fetch manifest from ${manifestUrl}`);
-          }
-
-          const rawManifest = await manifestRes.json();
-          // Minimal validation/sanitization (DOMPurify will handle markdown later)
-          setAgentData(rawManifest);
-
-          // We don't fetch SKILL.md in direct mode yet unless it's explicitly pointed to in the manifest
-          // For now, we will leave it empty or add logic to parse it from the manifest later
-          setSkillContent('SKILL.md fetching in decentralized mode is under construction.');
-
-        } else {
+        } 
+        
+        if (mode === 'gateway' || fallbackTriggered) {
           // --- GATEWAY RESOLUTION MODE ---
           const [manifestRes, skillRes] = await Promise.all([
             fetch(`${GATEWAY_URL}/manifests/${cleanName}.json`),
@@ -97,10 +113,37 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
             setSkillContent('No SKILL.md found for this agent.');
           }
         }
-
+        
       } catch (err) {
-        console.error('Error resolving hns:// agent:', err);
-        setError(err instanceof Error ? err.message : 'Unknown resolution error');
+        if (err instanceof Error && err.message === 'TRIGGER_FALLBACK') {
+          // Now execute the gateway fallback logic
+          try {
+            const [manifestRes, skillRes] = await Promise.all([
+              fetch(`${GATEWAY_URL}/manifests/${cleanName}.json`),
+              fetch(`${GATEWAY_URL}/skills/${cleanName}.md`)
+            ]);
+
+            if (!manifestRes.ok) {
+              throw new Error(`Agent manifest not found (Status: ${manifestRes.status})`);
+            }
+
+            const manifest = await manifestRes.json();
+            setAgentData(manifest);
+
+            if (skillRes.ok) {
+              const text = await skillRes.text();
+              setSkillContent(text);
+            } else {
+              setSkillContent('No SKILL.md found for this agent.');
+            }
+          } catch (gatewayErr) {
+            console.error('Fallback gateway resolution also failed:', gatewayErr);
+            setError(gatewayErr instanceof Error ? gatewayErr.message : 'Unknown resolution error');
+          }
+        } else {
+          console.error('Error resolving hns:// agent:', err);
+          setError(err instanceof Error ? err.message : 'Unknown resolution error');
+        }
       } finally {
         setLoading(false);
       }
@@ -109,7 +152,7 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
     resolveAgent();
   }, [cleanName]);
 
-  const handleCopy = (text: string, type: 'webhook' | 'did' | 'lightning' | 'tempo') => {
+  const handleCopy = (text: string, type: 'webhook' | 'did') => {
     navigator.clipboard.writeText(text);
     if (type === 'webhook') {
       setCopiedWebhook(true);
@@ -117,6 +160,18 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
     } else if (type === 'did') {
       setCopiedDid(true);
       setTimeout(() => setCopiedDid(false), 2000);
+    }
+  };
+
+  const handlePayment = (endpoint: string, type: 'lightning' | 'tempo') => {
+    if (type === 'lightning') {
+      // In a real implementation, this might trigger a WebLN provider (like Alby)
+      // or open a lightning: URI. For now, we mock an invoice trigger.
+      window.open(`lightning:${endpoint}`, '_self');
+      alert(`Triggering Lightning payment to: ${endpoint}`);
+    } else if (type === 'tempo') {
+      // Mocking a Tempo MPP flow
+      alert(`Initiating Tempo MPP flow with endpoint: ${endpoint}`);
     }
   };
 
@@ -177,6 +232,12 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
   return (
     <div className="min-h-screen bg-background text-zinc-300 font-sans p-4 md:p-8 flex flex-col items-center">
       {/* Top Bar */}
+      {fallbackTriggered && (
+        <div className="w-full max-w-4xl bg-amber-500/10 border border-amber-500/30 text-amber-500 px-4 py-3 rounded-xl mb-4 flex items-center text-sm shadow-[0_0_10px_rgba(245,158,11,0.1)]">
+          <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+          <span>Decentralized resolution failed or timed out. Automatically fell back to reliable Gateway mode.</span>
+        </div>
+      )}
       <header className="w-full max-w-4xl flex flex-col md:flex-row items-center justify-between bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 mb-8 shadow-lg backdrop-blur-sm">
         <div className="flex items-center space-x-2 text-zinc-400 mb-4 md:mb-0">
           <Code className="w-5 h-5 text-cyan" />
@@ -322,22 +383,20 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
                 <div className="space-y-3">
                   {agentData.payment_endpoints?.lightning && (
                     <button 
-                      onClick={() => handleCopy(agentData.payment_endpoints!.lightning!, 'lightning')}
+                      onClick={() => handlePayment(agentData.payment_endpoints!.lightning!, 'lightning')}
                       className="w-full flex items-center justify-center space-x-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 py-2.5 rounded-lg transition-colors font-medium text-sm group"
                     >
                       <Zap className="w-4 h-4" />
                       <span>Pay via Lightning</span>
-                      <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
                     </button>
                   )}
                   {agentData.payment_endpoints?.tempo_mpp && (
                     <button 
-                      onClick={() => handleCopy(agentData.payment_endpoints!.tempo_mpp!, 'tempo')}
+                      onClick={() => handlePayment(agentData.payment_endpoints!.tempo_mpp!, 'tempo')}
                       className="w-full flex items-center justify-center space-x-2 bg-magenta/10 hover:bg-magenta/20 text-magenta border border-magenta/30 py-2.5 rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(255,0,170,0.1)] hover:shadow-[0_0_20px_rgba(255,0,170,0.2)] group"
                     >
                       <Code className="w-4 h-4" />
                       <span>Pay via Tempo MPP</span>
-                      <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
                     </button>
                   )}
                   {(!agentData.payment_endpoints || (!agentData.payment_endpoints.lightning && !agentData.payment_endpoints.tempo_mpp)) && (

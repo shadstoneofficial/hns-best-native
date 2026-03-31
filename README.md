@@ -37,7 +37,10 @@ This repository contains the official open-source Chrome extension that register
 Once installed, the extension works seamlessly in the background:
 - **Omnibox Integration:** Type `hns`, press `Space` or `Tab`, and enter an agent's Handshake name (e.g., `mytradingagent.agent`).
 - **Web Links:** Click on any `hns://` link across the web to securely open the Agent Identity Card.
-- **Testing Dynamic Resolution:** You can test the dynamic fetching by typing `hns myagent.agent` in the omnibox. If the manifest is registered on the HeadlessDomains gateway, it will render the full Agent Identity Card with live data. If not, you will see a friendly "Resolution Failed" screen with an option to register the agent.
+- **Resolver Mode Toggle:** Click the extension icon to open the popup. You can switch between **Gateway (Default)** and **Decentralized Resolver** mode. 
+  - *Gateway mode* fetches data reliably via `headlessdomains.com`.
+  - *Decentralized mode* uses DNS-over-HTTPS (DoH) to query the Handshake blockchain directly for the `agent-manifest` TXT record, resolving data straight from the decentralized web. If it fails or times out, it gracefully falls back to Gateway mode.
+- **Testing Dynamic Resolution:** You can test the dynamic fetching by typing `hns myagent.agent` in the omnibox. If the manifest is registered, it will render the full Agent Identity Card with live data. If not, you will see a friendly "Resolution Failed" screen with an option to register the agent.
 
 ## Development Stack
 

@@ -24,11 +24,17 @@ export async function resolveHandshakeManifestUrl(domain: string): Promise<strin
       url.searchParams.append('name', targetDomain);
       url.searchParams.append('type', 'TXT');
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per DoH request
+      
       const response = await fetch(url.toString(), {
         headers: {
           'Accept': 'application/dns-json'
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) continue;
       
