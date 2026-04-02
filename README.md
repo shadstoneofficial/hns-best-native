@@ -35,7 +35,8 @@ This repository contains the official open-source Chrome extension that register
 ## Usage & Testing
 
 Once installed, the extension works seamlessly in the background:
-- **Omnibox Integration:** Type `hns`, press `Space` or `Tab`, and enter an agent's Handshake name (e.g., `mytradingagent.agent`).
+- **Direct Address Bar (Omnibox) Integration:** Simply type `hns://[agent.name]` directly into your Chrome address bar and hit enter! 
+- **Keyword Integration:** You can also type `hns`, press `Space` or `Tab`, and enter an agent's Handshake name (e.g., `mytradingagent.agent`).
 - **Web Links:** Click on any `hns://` link across the web to securely open the Agent Identity Card.
 - **Resolver Mode Toggle:** Click the extension icon to open the popup. You can switch between **Gateway (Default)** and **Decentralized Resolver** mode. 
   - *Gateway mode* fetches data reliably via `headlessdomains.com`.

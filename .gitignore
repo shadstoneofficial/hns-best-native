@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+hns-extension.zip
 
 # Editor directories and files
 .vscode/*

@@ -176,7 +176,7 @@ export function AgentIdentityCard({ hnsUrl }: AgentIdentityCardProps) {
   };
 
   const handleOpenHttps = () => {
-    window.open(`https://${cleanName}.hns.to`, '_blank');
+    window.open(`http://${cleanName}.hns.to`, '_blank');
   };
 
   if (loading) {
